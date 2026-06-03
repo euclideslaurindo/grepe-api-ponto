@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal do Servidor - Frequência</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    
+    <style>
+        body { background-color: #f8f9fa; }
+        .card { border-radius: 10px; border: none; }
+        .table-hover tbody tr:hover { background-color: #e9ecef; }
+        .navbar-brand { font-weight: 500; letter-spacing: 0.5px; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+        <div class="container">
+            <a class="navbar-brand" href="#">GRE Agreste Meridional - Ponto Eletrônico</a>
+            <span class="navbar-text text-light" id="nomeUsuarioLogado" style="display: none;"></span>
+        </div>
+    </nav>
+
+    <div class="container mt-5" id="telaLogin">
+        <div class="row justify-content-center">
+            <div class="col-md-5">
+                <div class="card shadow-sm p-4">
+                    <h4 class="text-center mb-4 text-secondary">Acesso ao Sistema</h4>
+                    <div class="mb-3">
+                        <label class="form-label">Matrícula</label>
+                        <input type="text" id="matriculaLogin" class="form-control" placeholder="Digite sua matrícula" maxlength="8">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Senha</label>
+                        <input type="password" id="senhaLogin" class="form-control" placeholder="Digite sua senha">
+                    </div>
+                    <div id="erroLogin" class="alert alert-danger" style="display: none;"></div>
+                    <button id="btnEntrar" class="btn btn-primary w-100 shadow-sm">Entrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container mt-5" id="telaTrocaSenha" style="display: none;">
+        <div class="row justify-content-center">
+            <div class="col-md-5">
+                <div class="card shadow-sm p-4">
+                    <h5 class="text-center mb-3 text-secondary">Primeiro Acesso</h5>
+                    <p class="text-muted text-center mb-4">Por segurança, você precisa criar uma nova senha pessoal antes de continuar.</p>
+                    <div class="mb-3">
+                        <label class="form-label">Nova Senha</label>
+                        <input type="password" id="novaSenha" class="form-control" placeholder="Digite a nova senha">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Confirme a Senha</label>
+                        <input type="password" id="confirmaSenha" class="form-control" placeholder="Repita a nova senha">
+                    </div>
+                    <div id="erroTroca" class="alert alert-danger" style="display: none;"></div>
+                    <button id="btnSalvarSenha" class="btn btn-success w-100 shadow-sm">Salvar e Continuar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container mt-5" id="telaSistema" style="display: none;">
+        <div class="card shadow-sm mb-4">
+            <div class="card-body p-4">
+                <h5 class="card-title text-secondary mb-3">Relatório de Ponto (histórico completo)</h5>
+                <div class="row g-3 align-items-center">
+                    <div class="col-auto">
+                        <label for="matricula" class="col-form-label fw-bold">Sua Matrícula:</label>
+                    </div>
+                    <div class="col-md-4">
+                        <input type="text" id="matricula" class="form-control bg-light text-primary fw-bold" readonly>
+                    </div>
+                    <div class="col-auto">
+                        <button id="btnBuscar" class="btn btn-primary px-4 shadow-sm">Gerar Relatório</button>
+                    </div>
+                </div>
+                <div id="mensagemErro" class="alert alert-danger mt-3 mb-0" style="display: none;"></div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm" id="cardResultados" style="display: none;">
+            <div class="card-body p-4">
+                <div id="resumoRelatorio" class="alert alert-info mb-3" style="display: none;"></div>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="card-title text-secondary mb-0">Relatório por Dia</h5>
+                    <button id="btnBaixarPdf" class="btn btn-danger shadow-sm">Baixar Relatório em PDF</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover align-middle" id="tabelaFrequencia">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Data</th>
+                                <th>Batidas</th>
+                                <th>Trabalhado</th>
+                                <th>Saldo do Dia</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaCorpo"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Variável global para controle da sessão no frontend
+        let usuarioLogado = ""; 
+
+        // Filtro para permitir apenas números no campo de matrícula
+        document.getElementById('matriculaLogin').addEventListener('input', function(e) {
+            this.value = this.value.replace(/[^0-9]/g, '');
+        });
+
+        // ==========================================
+        // LÓGICA DA TELA DE LOGIN
+        // ==========================================
+        document.getElementById('btnEntrar').addEventListener('click', function() {
+            const matricula = document.getElementById('matriculaLogin').value.trim();
+            const senha = document.getElementById('senhaLogin').value.trim();
+            const divErro = document.getElementById('erroLogin');
+            const btn = document.getElementById('btnEntrar');
+
+            divErro.style.display = 'none';
+
+            if (!matricula || !senha) {
+                divErro.textContent = 'Preencha matrícula e senha.';
+                divErro.style.display = 'block';
+                return;
+            }
+
+            btn.textContent = 'Aguarde...';
+            btn.disabled = true;
+
+            fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ matricula: matricula, senha: senha })
+            })
+            .then(response => response.json().then(data => ({ status: response.status, body: data })))
+            .then(resultado => {
+                btn.textContent = 'Entrar';
+                btn.disabled = false;
+
+                if (resultado.status !== 200) {
+                    divErro.textContent = resultado.body.mensagem || 'Credenciais inválidas.';
+                    divErro.style.display = 'block';
+                    return;
+                }
+
+                usuarioLogado = matricula;
+
+                // Mostra o nome do servidor no topo da tela
+                if(resultado.body.nome) {
+                    const spanNome = document.getElementById('nomeUsuarioLogado');
+                    spanNome.textContent = `Olá, ${resultado.body.nome}`;
+                    spanNome.style.display = 'inline';
+                }
+
+                // Direcionamento do Fluxo (Troca de Senha vs Sistema)
+                if (resultado.body.primeiroAcesso) {
+                    document.getElementById('telaLogin').style.display = 'none';
+                    document.getElementById('telaTrocaSenha').style.display = 'block';
+                } else {
+                    liberarSistema(matricula);
+                }
+            })
+            .catch(erro => {
+                btn.textContent = 'Entrar';
+                btn.disabled = false;
+                divErro.textContent = 'Erro de conexão com o servidor. Tente novamente.';
+                divErro.style.display = 'block';
+                console.error("Erro no login:", erro);
+            });
+        });
+
+        // ==========================================
+        // LÓGICA DA TELA DE TROCA DE SENHA
+        // ==========================================
+        document.getElementById('btnSalvarSenha').addEventListener('click', function() {
+            const nova = document.getElementById('novaSenha').value.trim();
+            const confirma = document.getElementById('confirmaSenha').value.trim();
+            const divErro = document.getElementById('erroTroca');
+            const btn = document.getElementById('btnSalvarSenha');
+
+            divErro.style.display = 'none';
+
+            if (!nova || !confirma) {
+                divErro.textContent = 'Preencha os dois campos.';
+                divErro.style.display = 'block';
+                return;
+            }
+            
+            if (nova.length < 6) {
+                divErro.textContent = 'A nova senha deve ter pelo menos 6 caracteres.';
+                divErro.style.display = 'block';
+                return;
+            }
+
+            if (nova !== confirma) {
+                divErro.textContent = 'As senhas não conferem.';
+                divErro.style.display = 'block';
+                return;
+            }
+
+            btn.textContent = 'Salvando...';
+            btn.disabled = true;
+
+            fetch('/api/auth/trocar-senha', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ matricula: usuarioLogado, novaSenha: nova })
+            })
+            .then(response => {
+                if (response.ok) {
+                    liberarSistema(usuarioLogado);
+                } else {
+                    throw new Error('Falha ao atualizar senha');
+                }
+            })
+            .catch(erro => {
+                btn.textContent = 'Salvar e Continuar';
+                btn.disabled = false;
+                divErro.textContent = 'Erro ao salvar a nova senha. Tente novamente.';
+                divErro.style.display = 'block';
+            });
+        });
+
+        // ==========================================
+        // FUNÇÃO DE TRANSIÇÃO E LIBERAÇÃO DO SISTEMA
+        // ==========================================
+        function liberarSistema(matricula) {
+            document.getElementById('telaLogin').style.display = 'none';
+            document.getElementById('telaTrocaSenha').style.display = 'none';
+            document.getElementById('telaSistema').style.display = 'block';
+            
+            // Preenche a matrícula de forma imutável para o usuário
+            document.getElementById('matricula').value = matricula;
+
+            // Dispara o clique automático para gerar o relatório do mês atual
+            document.getElementById('btnBuscar').click();
+        }
+
+        // ==========================================
+        // LÓGICA DO RELATÓRIO DE PONTO
+        // ==========================================
+        document.getElementById('btnBuscar').addEventListener('click', function() {
+            const matricula = document.getElementById('matricula').value;
+            const divErro = document.getElementById('mensagemErro');
+            const cardResultados = document.getElementById('cardResultados');
+            const tabelaCorpo = document.getElementById('tabelaCorpo');
+            const resumoRelatorio = document.getElementById('resumoRelatorio');
+            const btn = document.getElementById('btnBuscar');
+
+            divErro.style.display = 'none';
+            cardResultados.style.display = 'none';
+            resumoRelatorio.style.display = 'none';
+            tabelaCorpo.innerHTML = '';
+
+            btn.textContent = 'Gerando...';
+            btn.disabled = true;
+
+            fetch(`/api/ponto/relatorio/${matricula}`)
+                .then(response => {
+                    // Tratamento de segurança: Sessão Expirada ou Acesso Negado
+                    if (response.status === 401 || response.status === 403) {
+                        alert("Sua sessão expirou ou o acesso foi negado. Por favor, faça login novamente.");
+                        window.location.reload();
+                        throw new Error("Não autorizado");
+                    }
+                    return response.json().then(body => ({ ok: response.ok, body }));
+                })
+                .then(({ ok, body }) => {
+                    btn.textContent = 'Gerar Relatório';
+                    btn.disabled = false;
+
+                    if (!ok) {
+                        divErro.textContent = body.mensagem || 'Erro ao gerar relatório.';
+                        divErro.style.display = 'block';
+                        return;
+                    }
+
+                    if (!body.dias || body.dias.length === 0) {
+                        divErro.textContent = 'Nenhum registro de ponto encontrado para este período.';
+                        divErro.style.display = 'block';
+                        return;
+                    }
+
+                    // Preenche o cabeçalho de resumo
+                    resumoRelatorio.innerHTML = `
+                        <strong>Período:</strong> ${body.periodoInicio} a ${body.periodoFim} &nbsp;|&nbsp;
+                        <strong>Carga diária:</strong> ${body.cargaHorariaDiariaFormatada} &nbsp;|&nbsp;
+                        <strong>Banco de horas (dias válidos):</strong> ${body.totalSaldoFormatado}
+                    `;
+                    resumoRelatorio.style.display = 'block';
+
+                    // Desenha as linhas da tabela (do dia mais recente para o mais antigo)
+                    body.dias.slice().reverse().forEach(dia => {
+                        const inconsistente = dia.status === 'INCONSISTENTE';
+                        const horasBatidas = (dia.batidas || []).map(b => b.hora).join(' &rarr; ');
+                        const tr = document.createElement('tr');
+                        
+                        if (inconsistente) {
+                            tr.classList.add('table-danger');
+                        }
+                        
+                        tr.innerHTML = `
+                            <td class="fw-bold text-secondary">${dia.data}</td>
+                            <td>${horasBatidas || '<span class="text-muted">—</span>'}</td>
+                            <td>${dia.minutosTrabalhadosFormatado || '—'}</td>
+                            <td class="${dia.saldoDiaFormatado && dia.saldoDiaFormatado.includes('-') ? 'text-danger fw-bold' : 'text-success fw-bold'}">${dia.saldoDiaFormatado || '—'}</td>
+                            <td>
+                                ${inconsistente
+                                    ? '<span class="badge bg-danger shadow-sm">Inconsistente</span>'
+                                    : '<span class="badge bg-success shadow-sm">OK</span>'}
+                                ${dia.mensagem ? `<br><small class="text-muted">${dia.mensagem}</small>` : ''}
+                            </td>
+                        `;
+                        tabelaCorpo.appendChild(tr);
+                    });
+
+                    cardResultados.style.display = 'block';
+                })
+                .catch(erro => {
+                    if (erro.message !== "Não autorizado") {
+                        btn.textContent = 'Gerar Relatório';
+                        btn.disabled = false;
+                        divErro.textContent = 'Falha na comunicação com o servidor da GRE.';
+                        divErro.style.display = 'block';
+                        console.error(erro);
+                    }
+                });
+        });
+
+        // ==========================================
+        // GERAÇÃO DE PDF
+        // ==========================================
+        document.getElementById('btnBaixarPdf').addEventListener('click', function() {
+            const matricula = document.getElementById('matricula').value;
+            const nomeServidor = document.getElementById('nomeUsuarioLogado').textContent.replace('Olá, ', '');
+            
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            // Cabeçalho do PDF
+            doc.setFontSize(16);
+            doc.text('GRE Agreste Meridional - CTI', 14, 15);
+            
+            doc.setFontSize(11);
+            doc.text(`Relatório Oficial de Ponto Eletrônico`, 14, 23);
+            doc.text(`Servidor: ${nomeServidor} | Matrícula: ${matricula}`, 14, 29);
+            doc.text(`Data da emissão: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, 14, 35);
+
+            // Geração da Tabela
+            doc.autoTable({
+                html: '#tabelaFrequencia',
+                startY: 42,
+                theme: 'striped',
+                headStyles: { fillColor: [0, 102, 153] }, // Cor azul combinando com a NavBar
+                styles: { fontSize: 9 }
+            });
+
+            doc.save(`Frequencia_${matricula}_${new Date().toISOString().split('T')[0]}.pdf`);
+        });
+    </script>
+</body>
+</html>
